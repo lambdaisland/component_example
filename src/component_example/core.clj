@@ -9,10 +9,11 @@
             [system.components.postgres :as pg]
             [component-example.db :as db]))
 
-(defn new-routes [{:keys [db]}]
+(defn new-routes [{:keys [database] :as endpoint}]
   (routes
    (GET "/" [] {:status 200
-                :body "OK"})))
+                :body (pr-str (db/query (:connection database)
+                                        "SELECT * FROM widgets"))})))
 
 (def config {:port 4567
              :pg-config (assoc pg/DEFAULT-DB-SPEC
@@ -22,13 +23,18 @@
 
 (defn new-system [{:keys [port pg-config]}]
   (component/system-map
-   :endpoint (new-endpoint new-routes)
-   :web (new-jetty-web-server (new-routes) port)
+   :endpoint (component/using (new-endpoint new-routes) {:database :db})
+   :web (component/using (new-jetty-web-server port) [:endpoint])
    :db  (pg/new-postgres-database pg-config)))
 
 (def system (new-system config))
-
 #_
 (alter-var-root #'system component/stop)
 #_
 (alter-var-root #'system component/start)
+
+(inspect-system system)
+;;=>
+{:endpoint (:routes-fn :database :routes)
+ :web (:port :endpoint :jetty)
+ :db (:db-spec :connection :init-fn)}
